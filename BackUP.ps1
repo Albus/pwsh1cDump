@@ -83,16 +83,19 @@ function rac {
     }
     return ($Objects.List | Where-Object { -not [string]::IsNullOrEmpty($_) })
 }
+
 function GetSessions {
     [OutputType([PSObject[]])]
     param ([String]$ClusterGUID, [String]$BaseGUID, [String]$RasIP, [String]$RacBin)
-    return (rac -stdout (& $RacBin session list --cluster=$ClusterGUID --infobase=$BaseGUID $RasIP))
+    return (rac -stdout (& $RacBin session list --cluster=$ClusterGUID --infobase=$BaseGUID $RasIP)`
+    | Where-Object -FilterScript {@('Designer','BackgroundJob','1CV8','1CV8C','COMConnection','WSConnection').Contains($_.app_id)} )
 }
 
 function GetConnections {
     [OutputType([PSObject[]])]
     param ([String]$ClusterGUID, [String]$BaseGUID, [String]$BaseUser, [String]$BasePass, [String]$RasIP, [String]$RacBin)
-    return (rac -stdout (& $RacBin connection list --cluster=$ClusterGUID --infobase=$BaseGUID --infobase-user=$BaseUser --infobase-pwd=$BasePass $RasIP))
+    return (rac -stdout (& $RacBin connection list --cluster=$ClusterGUID --infobase=$BaseGUID --infobase-user=$BaseUser --infobase-pwd=$BasePass $RasIP) `
+    | Where-Object -FilterScript {@('Designer','BackgroundJob','1CV8','1CV8C','COMConnection','WSConnection').Contains($_.application)} )
 }
 function GetBase1cGUID {
     [OutputType([PSObject[]])]
