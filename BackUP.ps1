@@ -236,7 +236,7 @@ foreach ($1cBase in ($1cBases | Where-Object { -not [string]::IsNullOrWhiteSpace
                 if ($start) {
                     $p.WaitForExit() 
                     $p | ConvertTo-Json -AsArray | Out-File -FilePath $('{0}.exitcode.{1}' -f $FileName, $($p.ExitCode))
-                    $log = Get-Content -Path '.\uas_ut11--1576770072.log' -AsByteStream
+                    $log = Get-Content -Path $FileLog -AsByteStream
                     $log = [System.Text.Encoding]::GetEncoding(1251).GetString($log)
                     '{1} ExitCode#{0}' -f $p.ExitCode, $log | SendGram         
                     if ($p.ExitCode -eq 0) { break }
