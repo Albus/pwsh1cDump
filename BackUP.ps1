@@ -88,14 +88,14 @@ function GetSessions {
     [OutputType([PSObject[]])]
     param ([String]$ClusterGUID, [String]$BaseGUID, [String]$RasIP, [String]$RacBin)
     return (rac -stdout (& $RacBin session list --cluster=$ClusterGUID --infobase=$BaseGUID $RasIP)`
-    | Where-Object -FilterScript {@('Designer','BackgroundJob','1CV8','1CV8C','COMConnection','WSConnection').Contains($_.app_id)} )
+        | Where-Object -FilterScript { @('Designer', 'BackgroundJob', '1CV8', '1CV8C', 'COMConnection', 'WSConnection').Contains($_.app_id) } )
 }
 
 function GetConnections {
     [OutputType([PSObject[]])]
     param ([String]$ClusterGUID, [String]$BaseGUID, [String]$BaseUser, [String]$BasePass, [String]$RasIP, [String]$RacBin)
     return (rac -stdout (& $RacBin connection list --cluster=$ClusterGUID --infobase=$BaseGUID --infobase-user=$BaseUser --infobase-pwd=$BasePass $RasIP) `
-    | Where-Object -FilterScript {@('Designer','BackgroundJob','1CV8','1CV8C','COMConnection','WSConnection').Contains($_.application)} )
+        | Where-Object -FilterScript { @('Designer', 'BackgroundJob', '1CV8', '1CV8C', 'COMConnection', 'WSConnection').Contains($_.application) } )
 }
 function GetBase1cGUID {
     [OutputType([PSObject[]])]
@@ -234,14 +234,12 @@ foreach ($1cBase in ($1cBases | Where-Object { -not [string]::IsNullOrWhiteSpace
                 $p.StartInfo.Arguments = "CONFIG /UC$PermissionCode /AU- /DisableStartupMessages /WA- /N$1cBasesUser /P$1cBasesPass /S$RasIP\$1cBase /Out$FileLog /DumpIB$FileDt"
                 $start = $p.Start()
                 if ($start) {
-
                     $p.WaitForExit() 
-                    $p | Out-File -FilePath $('{0}.exitcode.{1}' -f $FileName, $($p.ExitCode))          
-                    if ($p.ExitCode -eq 0) {
-                        '{1} ExitCode#{0}' -f $p.ExitCode, $(Get-Content -Path $FileLog) | SendGram 
-                        break
-                    }
-                    else { '{1} ExitCode#{0}' -f $p.ExitCode, $(Get-Content -Path $FileLog) | SendGram }
+                    $p | ConvertTo-Json -AsArray | Out-File -FilePath $('{0}.exitcode.{1}' -f $FileName, $($p.ExitCode))
+                    $log = Get-Content -Path '.\uas_ut11--1576770072.log' -AsByteStream
+                    $log = [System.Text.Encoding]::GetEncoding(1251).GetString($log)
+                    '{1} ExitCode#{0}' -f $p.ExitCode, $log | SendGram         
+                    if ($p.ExitCode -eq 0) { break }
                 }
                 else { break }
             }
