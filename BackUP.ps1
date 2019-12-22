@@ -69,12 +69,13 @@ function rac {
     if (-not [string]::IsNullOrEmpty($StdOut)) {
         foreach ($line in $StdOut.Trim()) {
             if ([string]::IsNullOrWhiteSpace($line)) {
-                $Objects.Current = New-Object -TypeName PSObject
-                $Objects.List += $Objects.Current
-                continue
+                if ( -not [string]::IsNullOrEmpty($Objects.Current)) {
+                    $Objects.Current = New-Object -TypeName PSObject
+                    $Objects.List += $Objects.Current
+                }
             }
             else {
-                $keyvalue = ($line -split ':', 2, 'SimpleMatch').Trim().trim('"')
+                $keyvalue = ($line -split ':', 2, 'SimpleMatch').Trim().Trim('"')
                 if (-not [string]::IsNullOrWhiteSpace($keyvalue[0])) {
                     $Objects.Current | Add-Member -Type NoteProperty -Name ($keyvalue[0] -replace '-', '_') -Value $keyvalue[1]
                 }
@@ -145,24 +146,27 @@ function SendGram {
 
 Start-Transcript -Path $(Join-Path -Path $PSScriptRoot -ChildPath 'BackUp.log') -Append
 
-foreach ($1cBase in ($1cBases | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
+:bases foreach ($1cBase in ($1cBases | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
     $1cBaseGUID = GetBase1cGUID -RasIP $RasIP -ClusterGUID $ClusterGUID -Base $1cBase -RacBin $RacBin
 
     if (-not [string]::IsNullOrWhiteSpace($1cBaseGUID)) {
-        while ($true) {
-        
-            [System.Environment]::NewLine + '=' * 80 + [System.Environment]::NewLine + 'ЭТАП №1: Запрещаем подключения к базе'
-            while (@($Base1cInfo.sessions_deny, $Base1cInfo.scheduled_jobs_deny).Contains('off') -or $null -eq $Base1cInfo) {
-                Write-Host '>>> Отправка комманды ras для установки блокировки соединений' -ForegroundColor Yellow
-                & $RacBin infobase update $RasIP --cluster=$ClusterGUID `
-                    --infobase=$1cBaseGUID --infobase-user=$1cBasesUser --infobase-pwd=$1cBasesPass `
-                    --sessions-deny='on' --scheduled-jobs-deny='on' --permission-code=$PermissionCode --denied-message='Archiving in progress'
-                $Base1cInfo = GetBase1cInfo -RasIP $RasIP -RacBin $RacBin -ClusterGUID $ClusterGUID -BaseGUID $1cBaseGUID -BaseUser $1cBasesUser -BasePass $1cBasesPass
-            }
-            'База зазблокирована.' | SendGram
+
+        [System.Environment]::NewLine + '=' * 80 + [System.Environment]::NewLine + 'ЭТАП №1: Запрещаем подключения к базе'
+        while (@($Base1cInfo.sessions_deny, $Base1cInfo.scheduled_jobs_deny).Contains('off') -or $null -eq $Base1cInfo) {
+            Write-Host '>>> Отправка комманды ras для установки блокировки соединений' -ForegroundColor Yellow
+            & $RacBin infobase update $RasIP --cluster=$ClusterGUID `
+                --infobase=$1cBaseGUID --infobase-user=$1cBasesUser --infobase-pwd=$1cBasesPass `
+                --sessions-deny='on' --scheduled-jobs-deny='on' --permission-code=$PermissionCode --denied-message='Archiving in progress'
+            $Base1cInfo = GetBase1cInfo -RasIP $RasIP -RacBin $RacBin -ClusterGUID $ClusterGUID -BaseGUID $1cBaseGUID -BaseUser $1cBasesUser -BasePass $1cBasesPass
+        }
+        'База зазблокирована.' | SendGram
+        Write-Host 'Пауза 60 секунд' -ForegroundColor Gray
+        Start-Sleep -Seconds 60
+
+        :prepare_loop foreach ($iter in 1..3) {
 
             [System.Environment]::NewLine + '=' * 80 + [System.Environment]::NewLine + 'ЭТАП №2: Закрываем сессии'
-            foreach ($iter in 1..3) {
+            :close_sessions_loop foreach ($iter in 1..3) {
                 $Sessions = GetSessions -RasIP $RasIP -ClusterGUID $ClusterGUID -BaseGUID $1cBaseGUID -RacBin $RacBin
                 if (-not [string]::IsNullOrEmpty($Sessions)) {
                     foreach ($Session in $Sessions) {
@@ -170,11 +174,11 @@ foreach ($1cBase in ($1cBases | Where-Object { -not [string]::IsNullOrWhiteSpace
                         & $RacBin session terminate $RasIP --cluster=$clusterGUID --session=$SessionGUID --error-message='Archiving started'
                     }
                 }
-                else { break }
+                else { break :close_sessions_loop }
             }
 
             [System.Environment]::NewLine + '=' * 80 + [System.Environment]::NewLine + 'ЭТАП №3: Контроль зависших сессий'
-            foreach ($iter in 1..3) {
+            :terminate_proc_by_session foreach ($iter in 1..3) {
                 $Sessions = GetSessions -RasIP $RasIP -ClusterGUID $ClusterGUID -BaseGUID $1cBaseGUID -RacBin $RacBin
                 if (-not [string]::IsNullOrEmpty($Sessions)) {
                     Write-Host 'Пытаемся прибить зависшие серверные процессы' -ForegroundColor Red
@@ -182,12 +186,12 @@ foreach ($1cBase in ($1cBases | Where-Object { -not [string]::IsNullOrWhiteSpace
                 }
                 else {
                     Write-Host 'Зависших сессий не обнаружено' -ForegroundColor Green
-                    break
+                    break :terminate_proc_by_session
                 }
             }
 
             [System.Environment]::NewLine + '=' * 80 + [System.Environment]::NewLine + 'ЭТАП №4: Закрываем соединения'
-            foreach ($iter in 1..3) {
+            :close_connections foreach ($iter in 1..3) {
                 $Connections = GetConnections -RasIP $RasIP -ClusterGUID $ClusterGUID -BaseGUID $1cBaseGUID -BaseUser $1cBasesUser -BasePass $1cBasesPass -RacBin $RacBin
                 if (-not [string]::IsNullOrEmpty($Connections)) {
                     foreach ($Connection in $Connections) {
@@ -196,11 +200,11 @@ foreach ($1cBase in ($1cBases | Where-Object { -not [string]::IsNullOrWhiteSpace
                         & $RacBin connection disconnect $RasIP --cluster=$clusterGUID --connection=$ConnGUID --process=$ProcessGUID --infobase-user=$1cBasesUser --infobase-pwd=$1cBasesPass
                     }
                 }
-                else { break }
+                else { break :close_connections }
             }
 
             [System.Environment]::NewLine + '=' * 80 + [System.Environment]::NewLine + 'ЭТАП №5: Контроль зависших соединений'
-            foreach ($iter in 1..3) {
+            :terminalte_proc_by_connection foreach ($iter in 1..3) {
                 $Connections = GetConnections -RasIP $RasIP -ClusterGUID $ClusterGUID -BaseGUID $1cBaseGUID -BaseUser $1cBasesUser -BasePass $1cBasesPass -RacBin $RacBin
                 if (-not [string]::IsNullOrEmpty($Connections)) {
                     Write-Host 'Пытаемся прибить зависшие серверные процессы' -ForegroundColor Red
@@ -208,7 +212,7 @@ foreach ($1cBase in ($1cBases | Where-Object { -not [string]::IsNullOrWhiteSpace
                 }
                 else {
                     Write-Host 'Зависших соединений не обнаружено' -ForegroundColor Green
-                    break
+                    break :terminalte_proc_by_connection
                 }
             }
 
@@ -239,24 +243,23 @@ foreach ($1cBase in ($1cBases | Where-Object { -not [string]::IsNullOrWhiteSpace
                     $log = Get-Content -Path $FileLog -AsByteStream
                     $log = [System.Text.Encoding]::GetEncoding(1251).GetString($log)
                     '{1} ExitCode#{0}' -f $p.ExitCode, $log | SendGram         
-                    if ($p.ExitCode -eq 0) { break }
+                    if ($p.ExitCode -eq 0) { break :prepare_loop }
                 }
-                else { break }
-            }
+                else { break :prepare_loop }
+            } 
         }
-    }
+        
+        [System.Environment]::NewLine + '=' * 80 + [System.Environment]::NewLine + 'ЭТАП №7: Разрешаем подключения к серверу'
+        while (@($Base1cInfo.sessions_deny, $Base1cInfo.scheduled_jobs_deny).Contains('on') -or $null -eq $Base1cInfo) {
+            Write-Host 'Пауза 60 секунд' -ForegroundColor Gray
+            Start-Sleep -Seconds 60
+            Write-Host '>>> Отправка комманды ras для снятия блокировки соединений' -ForegroundColor Yellow
+            & $RacBin infobase update $RasIP --cluster=$ClusterGUID `
+                --infobase=$1cBaseGUID --infobase-user=$1cBasesUser --infobase-pwd=$1cBasesPass `
+                --sessions-deny='off' --scheduled-jobs-deny='off' --permission-code='' --denied-message=''
+            $Base1cInfo = GetBase1cInfo -RasIP $RasIP -RacBin $RacBin -ClusterGUID $ClusterGUID -BaseGUID $1cBaseGUID -BaseUser $1cBasesUser -BasePass $1cBasesPass   
+        }
+        'База разблокирована.' | SendGram
 
-
-    [System.Environment]::NewLine + '=' * 80 + [System.Environment]::NewLine + 'ЭТАП №7: Разрешаем подключения к серверу'
-    while (@($Base1cInfo.sessions_deny, $Base1cInfo.scheduled_jobs_deny).Contains('on') -or $null -eq $Base1cInfo) {
-        Write-Host 'Пауза 60 секунд' -ForegroundColor Gray
-        Start-Sleep -Seconds 60
-        Write-Host '>>> Отправка комманды ras для снятия блокировки соединений' -ForegroundColor Yellow
-        & $RacBin infobase update $RasIP --cluster=$ClusterGUID `
-            --infobase=$1cBaseGUID --infobase-user=$1cBasesUser --infobase-pwd=$1cBasesPass `
-            --sessions-deny='off' --scheduled-jobs-deny='off' --permission-code='' --denied-message=''
-        $Base1cInfo = GetBase1cInfo -RasIP $RasIP -RacBin $RacBin -ClusterGUID $ClusterGUID -BaseGUID $1cBaseGUID -BaseUser $1cBasesUser -BasePass $1cBasesPass   
     }
-    'База разблокирована.' | SendGram
 }
-
