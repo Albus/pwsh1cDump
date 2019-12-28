@@ -1,5 +1,5 @@
-$PSDefaultParameterValues = @{ '*:Encoding' = 'utf8' }
-$OutputEncoding = [System.Text.Encoding]::UTF8
+#$PSDefaultParameterValues = @{ '*:Encoding' = 'utf8' }
+#$OutputEncoding = [System.Text.Encoding]::UTF8
 
 Set-Variable -Option ReadOnly -Visibility Public -Force `
     -Scope Script -Name 'RasIP' -Value '10.12.1.17' `
@@ -137,14 +137,14 @@ function SendGram {
         Send-MailMessage -Subject 'Powershell Backuper 1C' -Body $('#UAS2DT @grevinden {0}' -f $text ) `
             -To 'warneverchanges@etlgr.com' -From 'ut_notifier@santens.ru' -SmtpServer 'smtp.santens.ru' -Port 25 `
             -Credential $(New-Object System.Management.Automation.PSCredential('ut_notifier@santens.ru', $SmtpPass)) `
-            -Encoding $Global:OutputEncoding -WarningAction SilentlyContinue
+            -Encoding $Global:OutputEncoding -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
     }
     end {
         ' [!] MSG >>> {0} ' -f $text | Write-Host -BackgroundColor DarkBlue -ForegroundColor Yellow
     }
 }
 
-Start-Transcript -Path $(Join-Path -Path $PSScriptRoot -ChildPath 'BackUp.log') -Append
+Start-Transcript -Path $(Join-Path -Path $PSScriptRoot -ChildPath 'BackUp.log') -Force
 
 :bases foreach ($1cBase in ($1cBases | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
     $1cBaseGUID = GetBase1cGUID -RasIP $RasIP -ClusterGUID $ClusterGUID -Base $1cBase -RacBin $RacBin
