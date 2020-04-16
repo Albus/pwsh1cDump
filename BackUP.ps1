@@ -1,5 +1,8 @@
-#$PSDefaultParameterValues = @{ '*:Encoding' = 'utf8' }
-#$OutputEncoding = [System.Text.Encoding]::UTF8
+$PSDefaultParameterValues['*:Encoding'] = 'utf8'
+$OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding("utf-8")
+
+chcp 65001
 
 Set-Variable -Option ReadOnly -Visibility Public -Force `
     -Scope Script -Name 'RasIP' -Value '10.12.1.17' `
@@ -17,9 +20,7 @@ Set-Variable -Option ReadOnly -Visibility Public -Force `
     -Description 'Код разрешения подлючатся к заблокированной БД (/UC)'
 
 Set-Variable -Option ReadOnly -Visibility Public -Force `
-    -Scope Script -Name '1cFolder' -Value (Join-Path -Path ${Env:\ProgramFiles} `
-        -ChildPath '1cv8' -Resolve | Join-Path -ChildPath '8.3.13.1644' -Resolve `
-    | Join-Path -ChildPath 'bin' -Resolve) `
+    -Scope Script -Name '1cFolder' -Value  'D:\1cv8\8.3.15.1830\bin' `
     -ErrorAction Stop -WarningAction SilentlyContinue `
     -Description 'Папка (полный путь) где лежат исполняемые файлы 1С'
 
@@ -144,7 +145,7 @@ function SendGram {
     }
 }
 
-Start-Transcript -Path $(Join-Path -Path $PSScriptRoot -ChildPath 'BackUp.log') -Force
+Start-Transcript -Path $(Join-Path -Path $PSScriptRoot -ChildPath 'BackUp.log') -Force -UseMinimalHeader
 
 :bases foreach ($1cBase in ($1cBases | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
     $1cBaseGUID = GetBase1cGUID -RasIP $RasIP -ClusterGUID $ClusterGUID -Base $1cBase -RacBin $RacBin
@@ -241,14 +242,14 @@ Start-Transcript -Path $(Join-Path -Path $PSScriptRoot -ChildPath 'BackUp.log') 
                     $p.WaitForExit() 
                     $p | ConvertTo-Json -AsArray | Out-File -FilePath $('{0}.exitcode.{1}' -f $FileName, $($p.ExitCode))
                     $log = Get-Content -Path $FileLog -AsByteStream
-                    $log = [System.Text.Encoding]::GetEncoding(1251).GetString($log)
+                    #$log = [System.Text.Encoding]::GetEncoding(1251).GetString($log)
                     '{1} ExitCode#{0}' -f $p.ExitCode, $log | SendGram         
                     if ($p.ExitCode -eq 0) { break :prepare_loop }
                 }
                 else { break :prepare_loop }
             } 
         }
-        
+
         [System.Environment]::NewLine + '=' * 80 + [System.Environment]::NewLine + 'ЭТАП №7: Разрешаем подключения к серверу'
         while (@($Base1cInfo.sessions_deny, $Base1cInfo.scheduled_jobs_deny).Contains('on') -or $null -eq $Base1cInfo) {
             Write-Host 'Пауза 60 секунд' -ForegroundColor Gray
