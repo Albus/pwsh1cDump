@@ -164,6 +164,13 @@ Start-Transcript -Path $(Join-Path -Path $PSScriptRoot -ChildPath 'BackUp.log') 
         Write-Host 'Пауза 60 секунд' -ForegroundColor Gray
         Start-Sleep -Seconds 60
 
+        Get-Service -ComputerName 10.12.1.16 -Name 1c* | Stop-Service
+        Get-Service -ComputerName 10.12.1.18 -Name 1c* | Stop-Service
+        Get-Service -ComputerName 10.12.1.17 -Name 1c* | Stop-Service
+        Get-Service -ComputerName 10.12.1.16 -Name 1c* | Start-Service
+        Get-Service -ComputerName 10.12.1.18 -Name 1c* | Start-Service
+        Get-Service -ComputerName 10.12.1.17 -Name 1c* | Start-Service
+        
         :prepare_loop foreach ($iter in 1..3) {
 
             [System.Environment]::NewLine + '=' * 80 + [System.Environment]::NewLine + 'ЭТАП №2: Закрываем сессии'
